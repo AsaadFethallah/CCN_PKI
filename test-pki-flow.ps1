@@ -3,7 +3,7 @@
 # Module : Confiance Numérique & Accès Biométrique (ENSET Mohammedia)
 # ===================================================================
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $Host.UI.RawUI.WindowTitle = "CCN_PKI - Démonstration & Test RFC 5280"
 
 $baseUrl = "http://localhost:8080"
@@ -66,7 +66,7 @@ $csrFile = "demo_server.csr"
 # Génération clé et CSR avec OpenSSL
 & $openssl req -new -newkey rsa:2048 -nodes -keyout $csrKey -out $csrFile -subj "/CN=serveur-web.enset.ma/O=ENSET/C=MA" 2>$null
 
-$csrContent = Get-Content $csrFile -Raw
+$csrContent = [System.IO.File]::ReadAllText("$pwd\$csrFile")
 $csrBody = @{
     csrPem = $csrContent
     type = "SERVER"

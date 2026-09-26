@@ -251,24 +251,70 @@ Le système développé, intitulé \textbf{CCN\_PKI}, satisfait l'intégralité 
 % ==============================================================================
 \chapter{Architecture Générale du Système}
 
-\section{Découpage Modulaire et Architecture en Couches}
-Le projet \textbf{CCN\_PKI} est architecturé selon le modèle de conception en couches (\textit{Layered Architecture}), garantissant une stricte séparation des responsabilités entre l'interface utilisateur, la logique métier cryptographique et la persistance des données.
+\section{Découpage Modulaire et Architecture à Cinq Niveaux}
+Le système \textbf{CCN\_PKI} est architecturé selon un modèle robuste à cinq niveaux horizontaux (\textit{Tiered Architecture}), garantissant une séparation étanche des responsabilités entre les consommateurs de services, l'interface graphique, la logique métier de sécurité, les moteurs cryptographiques de bas niveau et la persistance des données. 
+
+La figure~\ref{fig:architecture_systeme} illustre l'organisation des composants, leurs interfaces de communication ainsi que les flux de données traversant le conteneur Docker.
 
 \begin{figure}[H]
     \centering
     % TODO : Ajouter la capture d'écran ici
-    \includegraphics[width=0.8\textwidth]{chemin/vers/capture.png}
-    \caption{Architecture fonctionnelle et flux de données de la solution CCN\_PKI}
+    \includegraphics[width=\textwidth]{images/ec11dd04-7423-4542-8641-67e67307af10.jpeg}
+    \caption{Architecture technique à 5 niveaux et flux de données de la solution CCN\_PKI}
     \label{fig:architecture_systeme}
 \end{figure}
 
-\section{Composants Applicatifs et Technologies Retenues}
+\subsection{Description Détaillée des Cinq Niveaux}
+
 \begin{enumerate}
-    \item \textbf{Framework Applicatif (Spring Boot 3.3.5 / Java 21 LTS) :} Offre un environnement robuste avec inversion de contrôle (IoC), injection de dépendances et sécurité de typage fort.
-    \item \textbf{Fournisseur Cryptographique (Bouncy Castle 1.79) :} Bibliothèque de référence industrielle permettant l'instanciation de générateurs de certificats X.509 v3, d'opérateurs de signature ASN.1 et d'analyseurs PEM.
-    \item \textbf{Couche de Présentation (Thymeleaf \& CSS Dédié) :} Interface web moderne et ergonomique dotée d'un thème sombre axé cyber-sécurité.
-    \item \textbf{Couche de Persistance (Spring Data JPA \& H2) :} Stockage persistant des états de révocation et métadonnées en base relationnelle, doublé d'une écriture miroir des artefacts cryptographiques sur le système de fichiers (\texttt{pki-data/}).
+    \item \textbf{Niveau 1 : Utilisateurs \& Outils (Environnement Client) :}
+    \begin{itemize}
+        \item \textbf{Navigateurs Web (Dashboard Admin) :} Permet aux opérateurs de sécurité et aux étudiants d'interagir graphiquement avec l'infrastructure (visualisation de la Root CA, formulaires d'émission directe ou CSR, consultation de la liste des certificats, révocation et tableau de bord de métriques).
+        \item \textbf{Clients REST (cURL, Postman, Scripts d'automatisation) :} Consomment directement les points d'accès HTTP RESTful pour soumettre des demandes de signature CSR (\textit{PKCS\#10}) ou intégrer les opérations PKI dans des pipelines CI/CD et des scripts d'administration.
+    \end{itemize}
+
+    \item \textbf{Niveau 2 : Couche Présentation \& Contrôleurs (Docker Conteneur) :}
+    \begin{itemize}
+        \item \textbf{PkiWebController :} Contrôleur Spring MVC assurant le routage des requêtes web utilisateur et l'injection des modèles dans les gabarits de présentation.
+        \item \textbf{PkiRestController :} Contrôleur d'API exposant les endpoints RESTful au format JSON, PEM et binaire DER (\texttt{/api/pki/*}).
+        \item \textbf{Moteur de Rendu Thymeleaf :} Moteur de templating côté serveur générant dynamiquement les vues HTML5/CSS3 adaptées au thème CyberSécurité.
+    \end{itemize}
+
+    \item \textbf{Niveau 3 : Couche Services Métier (Java 21 LTS / Spring Boot 3) :}
+    \begin{itemize}
+        \item \textbf{CaService :} Supervise le cycle de vie complet de l'Autorité Racine auto-signée (Root CA, RSA 4096 bits), l'accès sécurisé à la clé privée de l'autorité et la persistance sur le système de fichiers.
+        \item \textbf{CertificateIssuingService :} Gère l'émission centralisée directe (génération de biclé et confection de trousseaux PKCS\#12 chiffrés) ainsi que la signature décentralisée des demandes CSR (PKCS\#10) avec validation formelle de la preuve de possession cryptographique (\textit{Proof of Possession}).
+        \item \textbf{CrlService :} Traite les demandes de révocation selon les motifs RFC 5280, pilote l'incrémentation séquentielle du numéro de CRL (\texttt{CRLNumber}) et orchestre la publication dynamique de la CRL X.509 v2.
+        \item \textbf{ValidationService :} Moteur d'audit cryptographique interne exécutant une vérification séquentielle à 4 niveaux (syntaxe ASN.1, admissibilité temporelle, intégrité mathématique de la signature de la CA, et contrôle d'absence dans la CRL active).
+        \item \textbf{OpenSslVerificationService :} Wrapper exploitant l'API \texttt{ProcessBuilder} pour invoquer directement le binaire système OpenSSL et générer des rapports de conformité indépendants.
+    \end{itemize}
+
+    \item \textbf{Niveau 4 : Moteurs Cryptographiques de Bas Niveau :}
+    \begin{itemize}
+        \item \textbf{Bouncy Castle Provider 1.79 (Provider « BC ») :} Cœur cryptographique de l'application, fournissant l'implémentation agréée des primitives de chiffrement asymétrique RSA, de hachage SHA-256, de construction des structures de données ASN.1 et d'encodage/décodage PEM.
+        \item \textbf{Binaire Système OpenSSL 3.3.x :} Présent nativement au sein de l'image Alpine Linux pour réaliser les audits externes officiels (\texttt{openssl verify -crl\_check}) sans nécessiter d'installation préalable sur le poste hôte.
+    \end{itemize}
+
+    \item \textbf{Niveau 5 : Couche Persistance \& Stockage (H2 \& Volume Docker) :}
+    \begin{itemize}
+        \item \textbf{Spring Data JPA / Hibernate 6 :} Couche d'abstraction et d'accès aux données simplifiant les opérations transactionnelles CRUD sur les entités de sécurité.
+        \item \textbf{Base de Données Relationnelle H2 (pkidb.mv.db) :} Moteur de base de données embarqué rapide et persistant, accessible via protocole JDBC, hébergeant les tables \texttt{CA\_ENTITY}, \texttt{CERTIFICATES} et \texttt{CRL\_ENTITY}.
+        \item \textbf{Volume Docker Persistant (\texttt{./pki-data/}) :} Montage hôte/conteneur garantissant l'intégrité physique et la pérennité des artefacts cryptographiques à travers les redémarrages :
+        \begin{itemize}
+            \item \texttt{pki-data/ca/} : Clés et certificat de l'Autorité Racine (\texttt{rootCA.crt}, \texttt{rootCA.key}).
+            \item \texttt{pki-data/certs/} : Certificats d'entité finale (\texttt{.crt}), clés privées associées (\texttt{.key}) et archives sécurisées (\texttt{.p12}).
+            \item \texttt{pki-data/crl/} : Listes de révocation actives sous forme textuelle PEM (\texttt{crl.pem}) et binaire ASN.1 DER (\texttt{crl.crl}).
+        \end{itemize}
+    \end{itemize}
 \end{enumerate}
+
+\subsection{Trajectoire et Flux de Données Critiques}
+L'architecture illustrée met en exergue trois flux cardinaux :
+\begin{itemize}
+    \item \textbf{Flux d'Émission via CSR (PKCS\#10) :} Le client soumet sa demande au format PEM vers le \texttt{PkiRestController}. La requête est transmise au \texttt{CertificateIssuingService}, qui sollicite \textbf{Bouncy Castle} pour vérifier la validité de la signature de la CSR. Une fois la preuve de possession attestée, le service forge le certificat X.509 v3, l'authentifie avec la clé privée de la Root CA, le persiste en base H2 et exporte le fichier \texttt{.crt} sur le volume disque avant restitution au client.
+    \item \textbf{Flux d'Audit Interne (Validation à 4 Niveaux) :} Le \texttt{ValidationService} reçoit le certificat à examiner, analyse sa syntaxe ASN.1, vérifie que la date courante s'inscrit dans la période d'admissibilité, déchiffre la signature grâce à la clé publique de la CA, et s'assure auprès du \texttt{CrlService} que le numéro de série ne figure pas dans la CRL active.
+    \item \textbf{Flux d'Audit Externe OpenSSL :} L'\texttt{OpenSslVerificationService} invoque en sous-processus sécurisé le binaire \texttt{/usr/bin/openssl} en lui injectant les fichiers \texttt{rootCA.pem}, \texttt{crl.pem} et le certificat cible avec le drapeau strict \texttt{-crl\_check}, recueillant les codes de diagnostic universels (tel que l'\textit{Erreur 23}).
+\end{itemize}
 
 \section{Organisation Détaillée des Paquetages et Classes}
 Le tableau~\ref{tab:classes_projet} synthétise le rôle des classes maîtresses développées dans le projet.
@@ -300,6 +346,70 @@ Le tableau~\ref{tab:classes_projet} synthétise le rôle des classes maîtresses
 \caption{Cartographie des classes et services du projet CCN\_PKI}
 \label{tab:classes_projet}
 \end{table}
+
+\section{Étude Approfondie de la Bibliothèque Cryptographique Bouncy Castle 1.79}
+
+\subsection{Présentation et Rôle dans l'Architecture CCN\_PKI}
+Pour concrétiser les exigences d'une Autorité Racine et satisfaire l'ensemble des primitives requises par la RFC 5280, le choix d'un fournisseur cryptographique de premier ordre était capital. Notre implémentation repose intégralement sur la suite logicielle de référence mondiale : \textbf{The Legion of the Bouncy Castle} (version \textbf{1.79}), à travers ses deux modules complémentaires :
+\begin{enumerate}
+    \item \textbf{\texttt{bcprov-jdk18on} (Bouncy Castle Provider) :} Fournit les implémentations algorithmiques de bas niveau compatibles avec l'architecture de sécurité Java (\textit{Java Cryptography Extension - JCE}). Il prend en charge la génération de nombres pseudo-aléatoires sécurisés (\texttt{SecureRandom}), le chiffrement asymétrique RSA (clés 2048 et 4096 bits), le hachage sécurisé SHA-256 et le déchiffrement des conteneurs protégés.
+    \item \textbf{\texttt{bcpkix-jdk18on} (PKIX / CMS / EAC / PKCS APIs) :} Fournit les structures de haut niveau dédiées aux infrastructures à clés publiques, notamment la manipulation de la syntaxe ASN.1, les générateurs de certificats X.509 v3 (\texttt{JcaX509v3CertificateBuilder}), les générateurs de listes de révocation v2 (\texttt{X509v2CRLBuilder}) et l'analyseur de requêtes CSR (\texttt{PKCS10CertificationRequest}).
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    % TODO : Ajouter la capture d'écran ici
+    \includegraphics[width=0.45\textwidth]{images/logo_bouncy_castle.jpg}
+    \caption{Logo officiel de Legion of the Bouncy Castle Cryptography Project}
+    \label{fig:logo_bouncy_castle}
+\end{figure}
+
+\subsection{Justification Technique et Nécessité d'Éviter le JDK Standard Seul}
+Une interrogation fréquente lors de la conception d'un MVP PKI en Java consiste à se demander : \textit{Pourquoi ne pas utiliser directement les API natives fournies par le JDK standard ?}
+
+La réponse tient aux limitations fondamentales de l'API standard \texttt{java.security.cert} :
+\begin{itemize}
+    \item \textbf{Absence d'API d'Émission Publique :} Le JDK Java standard a été historiquement conçu comme un environnement \textbf{consommateur} de certificats (vérifier un certificat TLS lors d'une connexion HTTP, valider un certificat JAR). Il ne met à disposition \textbf{aucune API publique officielle} permettant de forger de toutes pièces, signer et émettre un certificat X.509 v3 ou une CRL v2.
+    \item \textbf{Fermeture et Encapsulation Stricte du Package Interne \texttt{sun.security.*} :} Les tutoriels obsolètes suggéraient l'utilisation des classes internes du package propriétaire \texttt{sun.security.x509.*}. Toutefois, depuis Java 9 et l'introduction du système de modules (\textit{Project Jigsaw}), l'accès à ces classes internes est strictement prohibé par défaut au niveau de la JVM (déclenchement d'\texttt{IllegalAccessException}). En Java 21 LTS, s'appuyer sur des packages internes non documentés constitue une faute majeure d'ingénierie logicielle.
+    \item \textbf{Contrôle Total de l'Arbre ASN.1 DER :} Bouncy Castle offre un accès granulaire aux structures ASN.1 sous-jacentes. Il permet de marquer explicitement le fanion de criticité sur chaque extension, d'ordonner strictement les champs selon les exigences bit-à-bit d'OpenSSL 3, et de construire des certificats conformes aux spécifications les plus rigoureuses de l'IETF.
+\end{itemize}
+
+\section{Benchmark et Étude Comparative des Solutions Cryptographiques}
+
+Afin d'étayer scientifiquement notre décision architecturale, nous avons réalisé un benchmark comparatif approfondi entre les différentes approches technologiques utilisables pour développer un MVP d'Infrastructure à Clés Publiques.
+
+Le tableau~\ref{tab:benchmark_crypto} dresse la matrice d'évaluation multicritères comparant notre choix (\textbf{Bouncy Castle 1.79}) aux cinq principales alternatives de l'industrie.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l c c c c c X}
+\toprule
+\textbf{Technologie / Bibliothèque} & \textbf{RFC 5280} & \textbf{ASN.1} & \textbf{Sécurité} & \textbf{Portabilité} & \textbf{Spring Boot} & \textbf{Adoption Industrielle \& Verdict} \\
+\midrule
+\textbf{Bouncy Castle 1.79 (Notre Choix)} & \textbf{Excellente} & \textbf{Totale} & \textbf{Élevée} & \textbf{100\% JVM} & \textbf{Native} & Standard de référence mondial (EJBCA, Android Keystore, banques). \\
+\addlinespace
+\textbf{Java Standard JDK seul} & Faible & Partielle & Élevée & 100\% JVM & Native & Incapable d'émettre des certificats sans API internes interdites (\texttt{sun.security}). \\
+\addlinespace
+\textbf{OpenSSL CLI via Scripts Shell} & Bonne & Moyenne & Faible & Dépendante & Complexe & Vulnérable aux injections shell, maintenance lourde, parsing texte fragile. \\
+\addlinespace
+\textbf{Python \texttt{cryptography}} & Bonne & Élevée & Moyenne & Dépendante & Impossible & Très bon en prototypage Python, mais inadéquat pour un écosystème d'entreprise Java. \\
+\addlinespace
+\textbf{Node.js (\texttt{node-forge})} & Moyenne & Moyenne & Moyenne & Node.js & Impossible & Bibliothèques JS souvent incomplètes sur les extensions X.509 complexes. \\
+\addlinespace
+\textbf{OpenSSL C/C++ Natif (libcrypto)} & Excellente & Totale & Risques C & Native C & JNI/Complexe & Performance maximale, mais complexité de gestion mémoire (failles buffer overflow). \\
+\bottomrule
+\end{tabularx}
+\caption{Benchmark comparatif des bibliothèques et approches technologiques pour l'implémentation d'une PKI}
+\label{tab:benchmark_crypto}
+\end{table}
+
+\subsection{Analyse Critique des Résultats du Benchmark}
+\begin{enumerate}
+    \item \textbf{Face à l'approche « Scripts Shell OpenSSL » :} Bien qu'OpenSSL soit le couteau suisse de la cryptographie, encapsuler des commandes en ligne de commande via des scripts bash ou des appels système Java (\texttt{Runtime.getRuntime().exec}) présente des risques de sécurité majeurs (injection d'arguments), une instabilité de gestion d'erreurs (nécessité de parser du texte en sortie de console) et une surcharge importante liée à la création répétée de processus système. Dans CCN\_PKI, le cœur émetteur s'exécute en mémoire pure JVM via Bouncy Castle, réservant OpenSSL exclusivement à l'audit externe.
+    \item \textbf{Face aux langages non typés (Python / Node.js) :} Si la bibliothèque Python \texttt{cryptography} offre d'excellentes primitives, l'écosystème Java/Spring Boot apporte un typage statique strict, une gestion robuste de la concurrence multi-threads, et une intégration native avec la persistance relationnelle d'entreprise (JPA/Hibernate), critères prépondérants pour une autorité de certification pérenne.
+    \item \textbf{Face au C/C++ natif (OpenSSL / WolfSSL) :} Bien que les bibliothèques C natives soient ultra-performantes, elles exposent l'application aux vulnérabilités critiques de corruption mémoire (dépassements de mémoire tampon de type \textit{Heartbleed}). L'environnement managé de la JVM Java 21, couplé à la maturité de plus de vingt ans de Bouncy Castle, garantit une sécurité mémoire intrinsèque essentielle pour la manipulation de clés de haute valeur.
+\end{enumerate}
 
 % ==============================================================================
 % CHAPITRE 3 : CONFORMITÉ AUX STANDARDS X.509 ET RFC 5280

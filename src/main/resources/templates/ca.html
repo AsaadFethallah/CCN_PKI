@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Gestion Root CA')}"></head>
+<body>
+
+    <nav th:replace="~{fragments/layout :: nav('ca')}"></nav>
+
+    <main class="main-content">
+        <div th:replace="~{fragments/layout :: alerts}"></div>
+
+        <div class="page-header">
+            <div>
+                <h1 class="page-title"><i class="fa-solid fa-certificate" style="color: var(--accent-cyan);"></i> Autorité de Certification Racine (Root CA)</h1>
+                <p class="page-subtitle">Paramètres cryptographiques, certificat auto-signé et clés de l'autorité de confiance</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <a th:href="@{/api/pki/ca/cert(format='pem')}" class="btn btn-primary">
+                    <i class="fa-solid fa-download"></i> Télécharger rootCA.crt (PEM)
+                </a>
+                <a th:href="@{/api/pki/ca/cert(format='der')}" class="btn btn-secondary">
+                    <i class="fa-solid fa-download"></i> Format binaire (DER)
+                </a>
+            </div>
+        </div>
+
+        <div class="grid-cols-2">
+            <!-- Carte Détails X.509 Root CA -->
+            <div class="card" th:if="${ca != null}">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-info-circle"></i> Spécifications du Certificat Root CA</h2>
+                    <span class="badge badge-active">Auto-signé X.509v3</span>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.85rem; font-size: 0.9rem;">
+                    <div>
+                        <strong style="color: var(--text-secondary);">Distinguished Name (DN) :</strong><br>
+                        <span th:text="${ca.subjectDn}" style="color: var(--accent-cyan); font-weight: 600;"></span>
+                    </div>
+
+                    <div>
+                        <strong style="color: var(--text-secondary);">Numéro de Série (Hex) :</strong><br>
+                        <span class="mono-text" th:text="${ca.serialNumber}"></span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <strong style="color: var(--text-secondary);">Valide depuis le :</strong><br>
+                            <span th:text="${#temporals.format(ca.notBefore, 'dd/MM/yyyy HH:mm')}"></span>
+                        </div>
+                        <div>
+                            <strong style="color: var(--text-secondary);">Expire le :</strong><br>
+                            <span th:text="${#temporals.format(ca.notAfter, 'dd/MM/yyyy HH:mm')}"></span>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <strong style="color: var(--text-secondary);">Algorithme de Clé :</strong><br>
+                            <span class="badge badge-type" th:text="${ca.keyAlgorithm + ' ' + ca.keySize + ' bits'}"></span>
+                        </div>
+                        <div>
+                            <strong style="color: var(--text-secondary);">Signature :</strong><br>
+                            <span class="badge badge-type" th:text="${ca.signatureAlgorithm}"></span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <strong style="color: var(--text-secondary);">Empreinte Numérique SHA-256 :</strong><br>
+                        <span class="mono-text" style="font-size: 0.75rem;" th:text="${ca.sha256Fingerprint}"></span>
+                    </div>
+
+                    <div>
+                        <strong style="color: var(--text-secondary);">Extensions X.509 v3 Intégrées (RFC 5280) :</strong>
+                        <ul style="list-style: none; margin-top: 0.4rem; font-size: 0.85rem; color: var(--text-secondary);">
+                            <li><i class="fa-solid fa-check" style="color: var(--accent-emerald);"></i> <strong>Basic Constraints :</strong> CA=TRUE (critique)</li>
+                            <li><i class="fa-solid fa-check" style="color: var(--accent-emerald);"></i> <strong>Key Usage :</strong> Digital Signature, Certificate Sign, CRL Sign (critique)</li>
+                            <li><i class="fa-solid fa-check" style="color: var(--accent-emerald);"></i> <strong>Subject Key Identifier :</strong> Hash de la clé publique</li>
+                            <li><i class="fa-solid fa-check" style="color: var(--accent-emerald);"></i> <strong>Authority Key Identifier :</strong> Hash de l'autorité</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulaire de Génération / Régénération -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-rotate"></i> Initialiser / Régénérer la Root CA</h2>
+                </div>
+
+                <form th:action="@{/ca/init}" method="post">
+                    <div class="form-group">
+                        <label class="form-label">Distinguished Name (DN du Sujet)</label>
+                        <input type="text" name="subjectDn" class="form-control"
+                               th:value="${ca != null} ? ${ca.subjectDn} : 'CN=CCN Root CA, OU=Laboratoire Sécurité, O=ENSET Mohammedia, C=MA'" required>
+                        <small style="color: var(--text-muted); font-size: 0.8rem;">Format RFC : CN=Nom, OU=Unité, O=Organisation, C=Pays</small>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label class="form-label">Durée de Validité (Années)</label>
+                            <input type="number" name="validityYears" class="form-control" value="10" min="1" max="30">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Taille de Clé RSA</label>
+                            <select name="keySize" class="form-control">
+                                <option value="4096" selected>4096 bits (Recommandé CA)</option>
+                                <option value="2048">2048 bits (Standard)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.85rem; color: #fbbf24;">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <strong>Attention :</strong> Générer une nouvelle Root CA rendra obsolètes tous les certificats émis précédemment par l'ancienne autorité.
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                        <i class="fa-solid fa-key"></i> Générer la Clé et le Certificat Root CA
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Visualisation PEM du Certificat Root CA -->
+        <div class="card" th:if="${ca != null}">
+            <div class="card-header">
+                <h2 class="card-title"><i class="fa-solid fa-file-lines"></i> Certificat PEM (rootCA.crt)</h2>
+                <button onclick="navigator.clipboard.writeText(document.getElementById('pemBlock').innerText); alert('Certificat copié dans le presse-papier !');" class="btn btn-secondary btn-sm">
+                    <i class="fa-solid fa-copy"></i> Copier le Certificat
+                </button>
+            </div>
+            <pre class="code-block" id="pemBlock" th:text="${ca.certificatePem}"></pre>
+        </div>
+
+    </main>
+
+    <footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

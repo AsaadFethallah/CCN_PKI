@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Guide de Vérification OpenSSL')}"></head>
+<body>
+
+    <nav th:replace="~{fragments/layout :: nav('openssl')}"></nav>
+
+    <main class="main-content">
+        <div th:replace="~{fragments/layout :: alerts}"></div>
+
+        <div class="page-header">
+            <div>
+                <h1 class="page-title"><i class="fa-solid fa-terminal" style="color: var(--accent-cyan);"></i> Guide & Vérification OpenSSL</h1>
+                <p class="page-subtitle">Démonstration pratique de vérification conforme aux consignes du TP (OpenSSL CLI)</p>
+            </div>
+        </div>
+
+        <div class="grid-cols-2">
+            <!-- Guide des commandes OpenSSL -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-book-bookmark"></i> Commandes Officielles OpenSSL</h2>
+                    <span class="badge badge-type">RFC 5280</span>
+                </div>
+
+                <div style="font-size: 0.9rem; display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div>
+                        <strong style="color: var(--accent-emerald);">1. Vérification simple de la chaîne de confiance :</strong>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0.25rem 0;">Vérifie que le certificat client est authentifié par la Root CA :</p>
+                        <pre class="code-block">openssl verify -CAfile rootCA.pem client.crt</pre>
+                        <p style="color: var(--accent-emerald); font-size: 0.8rem; margin-top: 0.25rem;">&rarr; Résultat attendu : <code>client.crt: OK</code></p>
+                    </div>
+
+                    <div>
+                        <strong style="color: var(--accent-rose);">2. Vérification complète avec contrôle de la CRL (-crl_check) :</strong>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0.25rem 0;">Vérifie la chaîne ET s'assure que le certificat n'est pas révoqué :</p>
+                        <pre class="code-block">openssl verify -CAfile rootCA.pem -CRLfile crl.pem -crl_check client.crt</pre>
+                        <p style="color: var(--accent-emerald); font-size: 0.8rem; margin-top: 0.25rem;">&rarr; Si valide : <code>client.crt: OK</code></p>
+                        <p style="color: var(--accent-rose); font-size: 0.8rem; margin-top: 0.25rem;">&rarr; Si révoqué : <code>error 23 at 0 depth lookup: certificate revoked</code></p>
+                    </div>
+
+                    <div>
+                        <strong style="color: var(--accent-cyan);">3. Inspection détaillée d'un certificat X.509 :</strong>
+                        <pre class="code-block">openssl x509 -in client.crt -text -noout</pre>
+                    </div>
+
+                    <div>
+                        <strong style="color: var(--accent-purple);">4. Inspection détaillée de la liste de révocation :</strong>
+                        <pre class="code-block">openssl crl -in crl.pem -text -noout</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Exécuteur interactif OpenSSL -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-play"></i> Exécuteur Interactif OpenSSL</h2>
+                    <span class="badge badge-active">Test en Direct</span>
+                </div>
+
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                    Sélectionnez l'un des certificats émis par CCN_PKI pour exécuter la commande OpenSSL en direct sur le serveur :
+                </p>
+
+                <form th:action="@{/openssl-guide}" method="get">
+                    <input type="hidden" name="runCheck" value="true">
+
+                    <div class="form-group">
+                        <label class="form-label">Choisir un Certificat Émis :</label>
+                        <select name="serialNumber" class="form-control" required>
+                            <option value="" disabled selected>-- Sélectionnez un certificat --</option>
+                            <option th:each="c : ${certificates}"
+                                    th:value="${c.serialNumber}"
+                                    th:selected="${c.serialNumber == selectedSerial}"
+                                    th:text="${c.commonName + ' (Serial: ' + c.serialNumber + ') - [' + c.status.label + ']'}">
+                            </option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                        <i class="fa-solid fa-terminal"></i> Exécuter la Vérification OpenSSL
+                    </button>
+                </form>
+
+                <!-- Résultat de l'exécution OpenSSL -->
+                <div th:if="${openSslResult != null}" style="margin-top: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="font-size: 0.85rem; color: var(--text-secondary);">Sortie Console OpenSSL :</strong>
+                        <span th:if="${openSslResult.success}" class="badge badge-active"><i class="fa-solid fa-check"></i> Code Retour : 0 (Succès)</span>
+                        <span th:if="${!openSslResult.success}" class="badge badge-revoked"><i class="fa-solid fa-xmark"></i> Code Retour : <span th:text="${openSslResult.exitCode}"></span></span>
+                    </div>
+
+                    <p style="font-size: 0.8rem; color: var(--accent-cyan); margin-bottom: 0.4rem;">
+                        <strong>Commande exécutée :</strong>
+                    </p>
+                    <pre class="code-block" style="font-size: 0.75rem; padding: 0.5rem;" th:text="${openSslResult.executedCommand}"></pre>
+
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0.6rem 0 0.4rem 0;">
+                        <strong>Résultat :</strong>
+                    </p>
+                    <pre class="code-block" style="font-weight: 600;" th:classappend="${openSslResult.success} ? 'text-emerald' : 'text-rose'" th:text="${openSslResult.output}"></pre>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

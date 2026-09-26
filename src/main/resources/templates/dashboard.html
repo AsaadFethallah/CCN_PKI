@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Tableau de Bord')}"></head>
+<body>
+
+    <!-- Barre de navigation -->
+    <nav th:replace="~{fragments/layout :: nav('dashboard')}"></nav>
+
+    <main class="main-content">
+        <!-- Messages Flash -->
+        <div th:replace="~{fragments/layout :: alerts}"></div>
+
+        <!-- En-tête de page -->
+        <div class="page-header">
+            <div>
+                <h1 class="page-title"><i class="fa-solid fa-chart-pie" style="color: var(--accent-cyan);"></i> Tableau de Bord PKI</h1>
+                <p class="page-subtitle">Supervision en temps réel de l'Autorité Racine, des Certificats et de la CRL</p>
+            </div>
+            <div style="display: flex; gap: 0.75rem;">
+                <a th:href="@{/issue}" class="btn btn-primary">
+                    <i class="fa-solid fa-plus"></i> Émettre un Certificat
+                </a>
+                <a th:href="@{/validate}" class="btn btn-secondary">
+                    <i class="fa-solid fa-shield-check"></i> Valider un Certificat
+                </a>
+            </div>
+        </div>
+
+        <!-- Grille de Métriques -->
+        <div class="grid-cols-4">
+            <div class="stat-card">
+                <div class="stat-icon cyan"><i class="fa-solid fa-certificate"></i></div>
+                <div>
+                    <div class="stat-value" th:text="${totalCount}">0</div>
+                    <div class="stat-label">Total Certificats</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon emerald"><i class="fa-solid fa-circle-check"></i></div>
+                <div>
+                    <div class="stat-value" th:text="${activeCount}" style="color: var(--accent-emerald);">0</div>
+                    <div class="stat-label">Certificats Actifs</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon rose"><i class="fa-solid fa-ban"></i></div>
+                <div>
+                    <div class="stat-value" th:text="${revokedCount}" style="color: var(--accent-rose);">0</div>
+                    <div class="stat-label">Certificats Révoqués</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon amber"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                <div>
+                    <div class="stat-value" th:text="${expiredCount}" style="color: var(--accent-amber);">0</div>
+                    <div class="stat-label">Certificats Expirés</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cartes Root CA & CRL -->
+        <div class="grid-cols-2">
+            <!-- État de la Root CA -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <i class="fa-solid fa-shield-halved" style="color: var(--accent-cyan);"></i> Autorité Racine (Root CA)
+                    </h2>
+                    <span th:if="${ca != null}" class="badge badge-active"><i class="fa-solid fa-check"></i> Active & Auto-signée</span>
+                    <span th:if="${ca == null}" class="badge badge-revoked"><i class="fa-solid fa-xmark"></i> Non Initialisée</span>
+                </div>
+                <div th:if="${ca != null}">
+                    <p style="margin-bottom: 0.5rem; font-size: 0.9rem;">
+                        <strong>Sujet (DN) :</strong> <span th:text="${ca.subjectDn}" style="color: var(--text-secondary);"></span>
+                    </p>
+                    <p style="margin-bottom: 0.5rem; font-size: 0.9rem;">
+                        <strong>Numéro de Série (Hex) :</strong> <span class="mono-text" th:text="${ca.serialNumber}"></span>
+                    </p>
+                    <p style="margin-bottom: 0.5rem; font-size: 0.9rem;">
+                        <strong>Algorithme :</strong> <span class="badge badge-type" th:text="${ca.keyAlgorithm + ' ' + ca.keySize + ' bits (' + ca.signatureAlgorithm + ')'}"></span>
+                    </p>
+                    <p style="margin-bottom: 0.75rem; font-size: 0.9rem;">
+                        <strong>Empreinte SHA-256 :</strong><br>
+                        <span class="mono-text" style="font-size: 0.75rem;" th:text="${ca.sha256Fingerprint}"></span>
+                    </p>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                        <a th:href="@{/api/pki/ca/cert(format='pem')}" class="btn btn-secondary btn-sm">
+                            <i class="fa-solid fa-download"></i> rootCA.crt (PEM)
+                        </a>
+                        <a th:href="@{/ca}" class="btn btn-primary btn-sm">
+                            <i class="fa-solid fa-sliders"></i> Gérer la CA
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- État de la CRL -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <i class="fa-solid fa-list-check" style="color: var(--accent-rose);"></i> Liste de Révocation (CRL v2)
+                    </h2>
+                    <span th:if="${latestCrl != null}" class="badge badge-active">
+                        <i class="fa-solid fa-rotate"></i> Synchronisée
+                    </span>
+                </div>
+                <div th:if="${latestCrl != null}">
+                    <p style="margin-bottom: 0.5rem; font-size: 0.9rem;">
+                        <strong>Version / CRL Number :</strong> <span class="badge badge-type" th:text="'#' + ${latestCrl.crlNumber}"></span>
+                    </p>
+                    <p style="margin-bottom: 0.5rem; font-size: 0.9rem;">
+                        <strong>Entrées Révoquées :</strong> <span style="font-weight: 700; color: var(--accent-rose);" th:text="${latestCrl.revokedCount}">0</span>
+                    </p>
+                    <p style="margin-bottom: 0.5rem; font-size: 0.9rem;">
+                        <strong>Prochaine Mise à Jour (Next Update) :</strong> <span th:text="${#temporals.format(latestCrl.nextUpdate, 'dd/MM/yyyy HH:mm')}"></span>
+                    </p>
+                    <p style="margin-bottom: 0.75rem; font-size: 0.9rem;">
+                        <strong>Point de Distribution (CDP RFC 5280) :</strong><br>
+                        <span class="mono-text" style="font-size: 0.75rem;">http://localhost:8080/api/pki/crl/download</span>
+                    </p>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                        <a th:href="@{/api/pki/crl/download(format='pem')}" class="btn btn-secondary btn-sm">
+                            <i class="fa-solid fa-download"></i> crl.pem
+                        </a>
+                        <a th:href="@{/crl}" class="btn btn-primary btn-sm">
+                            <i class="fa-solid fa-eye"></i> Consulter la CRL
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tableau des derniers certificats émis -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Derniers Certificats Émis</h2>
+                <a th:href="@{/certificates}" class="btn btn-secondary btn-sm">Voir tout l'inventaire &rarr;</a>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Numéro de Série</th>
+                            <th>Nom Commun (CN)</th>
+                            <th>Type</th>
+                            <th>Statut</th>
+                            <th>Émis le</th>
+                            <th>Expire le</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(recentCerts)}">
+                            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                Aucun certificat émis pour le moment. Cliquez sur "Émettre un Certificat" pour commencer !
+                            </td>
+                        </tr>
+                        <tr th:each="cert : ${recentCerts}">
+                            <td><span class="mono-text" th:text="${cert.serialNumber}"></span></td>
+                            <td><strong th:text="${cert.commonName}">CN</strong></td>
+                            <td><span class="badge badge-type" th:text="${cert.type.label}">Client</span></td>
+                            <td>
+                                <span th:if="${cert.status.name() == 'ACTIVE'}" class="badge badge-active">Actif</span>
+                                <span th:if="${cert.status.name() == 'REVOKED'}" class="badge badge-revoked">Révoqué</span>
+                                <span th:if="${cert.status.name() == 'EXPIRED'}" class="badge badge-expired">Expiré</span>
+                            </td>
+                            <td th:text="${#temporals.format(cert.issuedAt, 'dd/MM/yyyy HH:mm')}"></td>
+                            <td th:text="${#temporals.format(cert.notAfter, 'dd/MM/yyyy')}"></td>
+                            <td>
+                                <div style="display: flex; gap: 0.35rem;">
+                                    <a th:href="@{'/api/pki/certificates/' + ${cert.serialNumber} + '/cert'}" class="btn btn-secondary btn-sm" title="Télécharger .crt">
+                                        <i class="fa-solid fa-download"></i> .crt
+                                    </a>
+                                    <a th:if="${cert.privateKeyPem != null}" th:href="@{'/api/pki/certificates/' + ${cert.serialNumber} + '/key'}" class="btn btn-secondary btn-sm" title="Télécharger .key">
+                                        <i class="fa-solid fa-key"></i> .key
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

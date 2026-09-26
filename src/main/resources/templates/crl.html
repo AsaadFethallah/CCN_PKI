@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Liste de Révocation (CRL)')}"></head>
+<body>
+
+    <nav th:replace="~{fragments/layout :: nav('crl')}"></nav>
+
+    <main class="main-content">
+        <div th:replace="~{fragments/layout :: alerts}"></div>
+
+        <div class="page-header">
+            <div>
+                <h1 class="page-title"><i class="fa-solid fa-ban" style="color: var(--accent-rose);"></i> Liste de Révocation de Certificats (CRL v2)</h1>
+                <p class="page-subtitle">Publication, distribution et synchronisation de la liste des certificats révoqués selon la RFC 5280</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <a th:href="@{/api/pki/crl/download(format='pem')}" class="btn btn-primary">
+                    <i class="fa-solid fa-download"></i> Télécharger crl.pem
+                </a>
+                <a th:href="@{/api/pki/crl/download(format='der')}" class="btn btn-secondary">
+                    <i class="fa-solid fa-download"></i> crl.crl (DER)
+                </a>
+            </div>
+        </div>
+
+        <div class="grid-cols-2">
+            <!-- Métadonnées de la CRL -->
+            <div class="card" th:if="${latestCrl != null}">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-file-shield"></i> État de la CRL Active</h2>
+                    <span class="badge badge-active">Signée par Root CA</span>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.85rem; font-size: 0.9rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <strong style="color: var(--text-secondary);">Numéro de Version CRL :</strong><br>
+                            <span class="badge badge-type" th:text="'CRL #' + ${latestCrl.crlNumber}"></span>
+                        </div>
+                        <div>
+                            <strong style="color: var(--text-secondary);">Certificats Révoqués :</strong><br>
+                            <span style="font-size: 1.25rem; font-weight: 700; color: var(--accent-rose);" th:text="${latestCrl.revokedCount}">0</span>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <strong style="color: var(--text-secondary);">Date d'émission (This Update) :</strong><br>
+                            <span th:text="${#temporals.format(latestCrl.thisUpdate, 'dd/MM/yyyy HH:mm:ss')}"></span>
+                        </div>
+                        <div>
+                            <strong style="color: var(--text-secondary);">Prochaine émission (Next Update) :</strong><br>
+                            <span th:text="${#temporals.format(latestCrl.nextUpdate, 'dd/MM/yyyy HH:mm:ss')}"></span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <strong style="color: var(--text-secondary);">Point de Distribution CRL (CDP) :</strong><br>
+                        <span class="mono-text" style="font-size: 0.8rem;">http://localhost:8080/api/pki/crl/download</span>
+                    </div>
+
+                    <div>
+                        <strong style="color: var(--text-secondary);">Commande de Test OpenSSL :</strong><br>
+                        <span class="mono-text" style="font-size: 0.75rem;">openssl crl -in crl.pem -text -noout</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action de Régénération -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-arrows-rotate"></i> Maintenance de la CRL</h2>
+                </div>
+
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                    La CRL est automatiquement regénérée et signée à chaque révocation d'un certificat. Vous pouvez également forcer une publication manuelle pour actualiser les horodatages <code>thisUpdate</code> et <code>nextUpdate</code>.
+                </p>
+
+                <form th:action="@{/crl/generate}" method="post">
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                        <i class="fa-solid fa-signature"></i> Forcer la Régénération & Signature de la CRL
+                    </button>
+                </form>
+
+                <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-surface); border-radius: 8px; font-size: 0.85rem;">
+                    <strong style="color: var(--accent-cyan);"><i class="fa-solid fa-lightbulb"></i> Note Pédagogique RFC 5280 :</strong><br>
+                    La liste de révocation (CRL) contient les numéros de série des certificats révoqués avant leur date d'expiration naturelle, le motif de révocation standardisé (ex: clé compromise), et est authentifiée par la signature de l'autorité émettrice.
+                </div>
+            </div>
+        </div>
+
+        <!-- Tableau des Révocations -->
+        <div class="card" style="margin-top: 1.5rem;">
+            <div class="card-header">
+                <h2 class="card-title"><i class="fa-solid fa-list-ol"></i> Entrées Révoquées dans la CRL</h2>
+                <span class="badge badge-revoked" th:text="${#lists.size(revocations)} + ' certificat(s)'"></span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Numéro de Série (Hex)</th>
+                            <th>Date de Révocation</th>
+                            <th>Motif de Révocation (RFC 5280)</th>
+                            <th>Nom Commun Associé</th>
+                            <th>Commentaire</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(revocations)}">
+                            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                Aucune révocation enregistrée. Tous les certificats émis sont actifs.
+                            </td>
+                        </tr>
+                        <tr th:each="rev : ${revocations}">
+                            <td><span class="mono-text" th:text="${rev.serialNumber}"></span></td>
+                            <td th:text="${#temporals.format(rev.revocationDate, 'dd/MM/yyyy HH:mm:ss')}"></td>
+                            <td>
+                                <span class="badge badge-revoked" th:text="${rev.reason.description}">Compromis</span>
+                            </td>
+                            <td>
+                                <strong th:if="${rev.certificate != null}" th:text="${rev.certificate.commonName}">CN</strong>
+                                <span th:if="${rev.certificate == null}" style="color: var(--text-muted);">-</span>
+                            </td>
+                            <td th:text="${rev.comments != null && !rev.comments.isEmpty()} ? ${rev.comments} : '-'"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Contenu PEM de la CRL -->
+        <div class="card" style="margin-top: 1.5rem;" th:if="${latestCrl != null}">
+            <div class="card-header">
+                <h2 class="card-title"><i class="fa-solid fa-code"></i> Fichier CRL Signé (crl.pem)</h2>
+                <button onclick="navigator.clipboard.writeText(document.getElementById('crlBlock').innerText); alert('CRL copiée dans le presse-papier !');" class="btn btn-secondary btn-sm">
+                    <i class="fa-solid fa-copy"></i> Copier
+                </button>
+            </div>
+            <pre class="code-block" id="crlBlock" th:text="${latestCrl.crlPem}"></pre>
+        </div>
+
+    </main>
+
+    <footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

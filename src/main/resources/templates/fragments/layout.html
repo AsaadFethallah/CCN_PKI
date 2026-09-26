@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${title} + ' - CCN_PKI (Option B)'">CCN_PKI</title>
+    <!-- Fonts Google Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Custom Style -->
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+
+    <!-- Header & Navigation -->
+    <nav th:fragment="nav(activeNav)" class="navbar">
+        <div class="nav-container">
+            <a th:href="@{/}" class="brand">
+                <span class="brand-badge"><i class="fa-solid fa-shield-halved"></i> CCN_PKI</span>
+                <span class="brand-title">MVP Infrastructure PKI</span>
+            </a>
+
+            <ul class="nav-links">
+                <li>
+                    <a th:href="@{/}" th:classappend="${activeNav == 'dashboard'} ? 'active' : ''" class="nav-link">
+                        <i class="fa-solid fa-chart-pie"></i> Tableau de Bord
+                    </a>
+                </li>
+                <li>
+                    <a th:href="@{/ca}" th:classappend="${activeNav == 'ca'} ? 'active' : ''" class="nav-link">
+                        <i class="fa-solid fa-certificate"></i> Root CA
+                    </a>
+                </li>
+                <li>
+                    <a th:href="@{/issue}" th:classappend="${activeNav == 'issue'} ? 'active' : ''" class="nav-link">
+                        <i class="fa-solid fa-file-signature"></i> Émettre
+                    </a>
+                </li>
+                <li>
+                    <a th:href="@{/certificates}" th:classappend="${activeNav == 'certificates'} ? 'active' : ''" class="nav-link">
+                        <i class="fa-solid fa-folder-closed"></i> Certificats
+                    </a>
+                </li>
+                <li>
+                    <a th:href="@{/crl}" th:classappend="${activeNav == 'crl'} ? 'active' : ''" class="nav-link">
+                        <i class="fa-solid fa-ban"></i> CRL (Révocations)
+                    </a>
+                </li>
+                <li>
+                    <a th:href="@{/validate}" th:classappend="${activeNav == 'validate'} ? 'active' : ''" class="nav-link">
+                        <i class="fa-solid fa-shield-check"></i> Validateur
+                    </a>
+                </li>
+                <li>
+                    <a th:href="@{/openssl-guide}" th:classappend="${activeNav == 'openssl'} ? 'active' : ''" class="nav-link">
+                        <i class="fa-solid fa-terminal"></i> OpenSSL
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Flash Messages Component -->
+    <div th:fragment="alerts">
+        <div th:if="${successMessage}" class="alert alert-success">
+            <i class="fa-solid fa-circle-check"></i>
+            <span th:text="${successMessage}">Succès !</span>
+        </div>
+        <div th:if="${errorMessage}" class="alert alert-danger">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span th:text="${errorMessage}">Erreur !</span>
+        </div>
+    </div>
+
+    <!-- Footer Component -->
+    <footer th:fragment="footer" class="footer">
+        <p><strong>CCN_PKI</strong> &bull; TP Confiance Numérique et Accès Biométrique &bull; Option B : Développement d'un MVP PKI</p>
+        <p style="margin-top: 0.35rem; color: var(--text-muted); font-size: 0.8rem;">
+            ENSET Mohammedia &bull; Université Hassan II de Casablanca &bull; Implémentation conforme X.509 RFC 5280
+        </p>
+    </footer>
+
+</body>
+</html>

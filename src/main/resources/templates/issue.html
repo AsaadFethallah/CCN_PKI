@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Émission de Certificat')}"></head>
+<body>
+
+    <nav th:replace="~{fragments/layout :: nav('issue')}"></nav>
+
+    <main class="main-content">
+        <div th:replace="~{fragments/layout :: alerts}"></div>
+
+        <!-- Alerte de certificat récemment émis avec téléchargements directs -->
+        <div th:if="${issuedCert != null}" class="card" style="border-color: var(--accent-emerald); margin-bottom: 2rem; background: rgba(16, 185, 129, 0.05);">
+            <div class="card-header" style="border-color: rgba(16, 185, 129, 0.3);">
+                <h2 class="card-title" style="color: var(--accent-emerald);">
+                    <i class="fa-solid fa-circle-check"></i> Certificat Émis avec Succès !
+                </h2>
+                <span class="badge badge-active">Prêt au téléchargement</span>
+            </div>
+            <div style="font-size: 0.95rem; margin-bottom: 1rem;">
+                <p><strong>Nom Commun (CN) :</strong> <span th:text="${issuedCert.commonName}"></span></p>
+                <p><strong>Numéro de Série :</strong> <span class="mono-text" th:text="${issuedCert.serialNumber}"></span></p>
+                <p><strong>Type :</strong> <span class="badge badge-type" th:text="${issuedCert.type.label}"></span></p>
+                <p><strong>Expire le :</strong> <span th:text="${#temporals.format(issuedCert.notAfter, 'dd/MM/yyyy HH:mm')}"></span></p>
+            </div>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <a th:href="@{'/api/pki/certificates/' + ${issuedCert.serialNumber} + '/cert'}" class="btn btn-primary btn-sm">
+                    <i class="fa-solid fa-download"></i> Certificat (.crt / PEM)
+                </a>
+                <a th:if="${issuedCert.privateKeyPem != null}" th:href="@{'/api/pki/certificates/' + ${issuedCert.serialNumber} + '/key'}" class="btn btn-secondary btn-sm">
+                    <i class="fa-solid fa-key"></i> Clé Privée (.key)
+                </a>
+                <a th:if="${issuedCert.privateKeyPem != null}" th:href="@{'/api/pki/certificates/' + ${issuedCert.serialNumber} + '/p12'}" class="btn btn-secondary btn-sm">
+                    <i class="fa-solid fa-box-archive"></i> Trousseau PKCS#12 (.p12)
+                </a>
+                <a th:href="@{/validate}" class="btn btn-secondary btn-sm">
+                    <i class="fa-solid fa-shield-check"></i> Tester dans le Validateur
+                </a>
+            </div>
+        </div>
+
+        <div class="page-header">
+            <div>
+                <h1 class="page-title"><i class="fa-solid fa-file-signature" style="color: var(--accent-cyan);"></i> Émission de Certificats X.509 v3</h1>
+                <p class="page-subtitle">Génération directe de biclé ou signature d'une demande de certificat (CSR PKCS#10)</p>
+            </div>
+        </div>
+
+        <!-- Onglets Navigation -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tab-direct', this)">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Mode Direct (Génération Clé + Certificat)
+            </button>
+            <button class="tab-btn" onclick="switchTab('tab-csr', this)">
+                <i class="fa-solid fa-file-contract"></i> Mode CSR (Signature de Demande PKCS#10)
+            </button>
+        </div>
+
+        <!-- Onglet 1 : Mode Direct -->
+        <div id="tab-direct" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-id-card"></i> Formulaire d'Émission Directe</h2>
+                    <span class="badge badge-type">Signé par Root CA</span>
+                </div>
+
+                <form th:action="@{/issue/direct}" method="post">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+                        <div class="form-group">
+                            <label class="form-label">Nom Commun (Common Name - CN) *</label>
+                            <input type="text" name="commonName" class="form-control" placeholder="ex: etudiant.enset.ma ou mon-serveur.local" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Type de Certificat</label>
+                            <select name="type" class="form-control">
+                                <option th:each="t : ${types}" th:value="${t}" th:text="${t.label}"></option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Organisation (O)</label>
+                            <input type="text" name="organization" class="form-control" value="ENSET Mohammedia">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Unité Organisationnelle (OU)</label>
+                            <input type="text" name="organizationalUnit" class="form-control" value="Master CyberSécurité">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Pays (C)</label>
+                            <input type="text" name="country" class="form-control" value="MA" maxlength="2">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Adresse Email</label>
+                            <input type="email" name="email" class="form-control" placeholder="ex: contact@enset-media.ac.ma">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Validité (Jours)</label>
+                            <input type="number" name="validityDays" class="form-control" value="365" min="1" max="3650">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Taille de Clé RSA</label>
+                            <select name="keySize" class="form-control">
+                                <option value="2048" selected>2048 bits (Recommandé Standard)</option>
+                                <option value="4096">4096 bits (Haute Sécurité)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Subject Alternative Names (SANs) - Séparés par des virgules</label>
+                        <input type="text" name="subjectAlternativeNames" class="form-control" placeholder="ex: localhost, 127.0.0.1, app.local, 192.168.1.100">
+                        <small style="color: var(--text-muted); font-size: 0.8rem;">Indispensable pour les navigateurs modernes (Chrome/Firefox/curl) pour valider un certificat serveur.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Mot de Passe pour Conteneur PKCS#12 (.p12) [Optionnel]</label>
+                        <input type="password" name="pkcs12Password" class="form-control" placeholder="Laissez vide pour aucun mot de passe">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">
+                        <i class="fa-solid fa-shield-halved"></i> Générer la Clé et Émettre le Certificat
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Onglet 2 : Mode CSR -->
+        <div id="tab-csr" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-upload"></i> Signature d'une CSR (PKCS#10)</h2>
+                    <span class="badge badge-type">Clé privée conservée par le client</span>
+                </div>
+
+                <form th:action="@{/issue/csr}" method="post" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label class="form-label">Fichier CSR (.csr / .pem)</label>
+                        <input type="file" name="csrFile" class="form-control" accept=".csr,.pem,.txt">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Ou coller directement la demande CSR (PEM)</label>
+                        <textarea name="csrPem" class="form-control" rows="6" placeholder="-----BEGIN CERTIFICATE REQUEST-----&#10;MIICvDCCAaQCAQAwdzELMAkGA1UEBhMCTUExGjAYBgNVBAgMEUNhc2FibGFuY2Et&#10;...&#10;-----END CERTIFICATE REQUEST-----"></textarea>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label class="form-label">Type de Certificat</label>
+                            <select name="type" class="form-control">
+                                <option th:each="t : ${types}" th:value="${t}" th:text="${t.label}"></option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Validité (Jours)</label>
+                            <input type="number" name="validityDays" class="form-control" value="365" min="1" max="3650">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Subject Alternative Names (SANs) additionnels</label>
+                        <input type="text" name="subjectAlternativeNames" class="form-control" placeholder="ex: localhost, 127.0.0.1">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">
+                        <i class="fa-solid fa-file-signature"></i> Valider la CSR et Signer le Certificat
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+        }
+    </script>
+
+    <footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

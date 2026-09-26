@@ -1,0 +1,24 @@
+services:
+  ccn-pki:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ccn-pki-app
+    image: ccn-pki:1.0.0
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persistance des certificats, de la Root CA, des clés et de la base H2
+      - ./pki-data:/app/pki-data
+    environment:
+      - SERVER_PORT=8080
+      - PKI_STORAGE_BASE_DIR=/app/pki-data
+      - PKI_CA_DEFAULT_DN=CN=CCN Root CA, OU=Laboratoire Sécurité, O=ENSET Mohammedia, C=MA
+      - PKI_CRL_DISTRIBUTION_POINT=http://localhost:8080/api/pki/crl/download
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/pki/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

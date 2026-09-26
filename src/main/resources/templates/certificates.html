@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Inventaire des Certificats')}"></head>
+<body>
+
+    <nav th:replace="~{fragments/layout :: nav('certificates')}"></nav>
+
+    <main class="main-content">
+        <div th:replace="~{fragments/layout :: alerts}"></div>
+
+        <div class="page-header">
+            <div>
+                <h1 class="page-title"><i class="fa-solid fa-folder-closed" style="color: var(--accent-cyan);"></i> Inventaire des Certificats Émis</h1>
+                <p class="page-subtitle">Suivi du cycle de vie des certificats, téléchargement des artefacts et révocation</p>
+            </div>
+            <div>
+                <a th:href="@{/issue}" class="btn btn-primary">
+                    <i class="fa-solid fa-plus"></i> Nouveau Certificat
+                </a>
+            </div>
+        </div>
+
+        <!-- Filtres et Recherche -->
+        <div class="card" style="margin-bottom: 1.5rem; padding: 1rem 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                <div style="display: flex; gap: 0.5rem;">
+                    <a th:href="@{/certificates}" class="btn btn-sm" th:classappend="${selectedStatus == null} ? 'btn-primary' : 'btn-secondary'">Tous</a>
+                    <a th:href="@{/certificates(status='ACTIVE')}" class="btn btn-sm" th:classappend="${selectedStatus != null && selectedStatus.name() == 'ACTIVE'} ? 'btn-primary' : 'btn-secondary'">Actifs</a>
+                    <a th:href="@{/certificates(status='REVOKED')}" class="btn btn-sm" th:classappend="${selectedStatus != null && selectedStatus.name() == 'REVOKED'} ? 'btn-primary' : 'btn-secondary'">Révoqués</a>
+                    <a th:href="@{/certificates(status='EXPIRED')}" class="btn btn-sm" th:classappend="${selectedStatus != null && selectedStatus.name() == 'EXPIRED'} ? 'btn-primary' : 'btn-secondary'">Expirés</a>
+                </div>
+                <div style="min-width: 260px;">
+                    <input type="text" id="certSearch" class="form-control" placeholder="Rechercher par CN ou Serial..." onkeyup="filterCerts()">
+                </div>
+            </div>
+        </div>
+
+        <!-- Tableau des Certificats -->
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table" id="certTable">
+                    <thead>
+                        <tr>
+                            <th>Numéro de Série</th>
+                            <th>Nom Commun (CN)</th>
+                            <th>Organisation</th>
+                            <th>Type</th>
+                            <th>Statut</th>
+                            <th>Expire le</th>
+                            <th>Téléchargements</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(certificates)}">
+                            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                Aucun certificat trouvé avec ce filtre.
+                            </td>
+                        </tr>
+                        <tr th:each="cert : ${certificates}">
+                            <td><span class="mono-text" th:text="${cert.serialNumber}"></span></td>
+                            <td><strong th:text="${cert.commonName}">CN</strong></td>
+                            <td th:text="${cert.organization}">Org</td>
+                            <td><span class="badge badge-type" th:text="${cert.type.label}">Client</span></td>
+                            <td>
+                                <span th:if="${cert.status.name() == 'ACTIVE'}" class="badge badge-active">Actif</span>
+                                <span th:if="${cert.status.name() == 'REVOKED'}" class="badge badge-revoked"
+                                      th:title="'Révoqué le ' + ${#temporals.format(cert.revokedAt, 'dd/MM/yyyy HH:mm')} + ' (' + (${cert.revocationReason != null} ? ${cert.revocationReason.description} : 'Inconnu') + ')'">
+                                    <i class="fa-solid fa-ban"></i> Révoqué
+                                </span>
+                                <span th:if="${cert.status.name() == 'EXPIRED'}" class="badge badge-expired">Expiré</span>
+                            </td>
+                            <td th:text="${#temporals.format(cert.notAfter, 'dd/MM/yyyy')}"></td>
+                            <td>
+                                <div style="display: flex; gap: 0.35rem;">
+                                    <a th:href="@{'/api/pki/certificates/' + ${cert.serialNumber} + '/cert'}" class="btn btn-secondary btn-sm" title="Télécharger .crt">
+                                        <i class="fa-solid fa-download"></i> .crt
+                                    </a>
+                                    <a th:if="${cert.privateKeyPem != null}" th:href="@{'/api/pki/certificates/' + ${cert.serialNumber} + '/key'}" class="btn btn-secondary btn-sm" title="Télécharger .key">
+                                        <i class="fa-solid fa-key"></i> .key
+                                    </a>
+                                    <a th:if="${cert.privateKeyPem != null}" th:href="@{'/api/pki/certificates/' + ${cert.serialNumber} + '/p12'}" class="btn btn-secondary btn-sm" title="Télécharger .p12">
+                                        <i class="fa-solid fa-box-archive"></i> .p12
+                                    </a>
+                                </div>
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: 0.35rem;">
+                                    <a th:href="@{'/openssl-guide?serialNumber=' + ${cert.serialNumber} + '&runCheck=true'}" class="btn btn-secondary btn-sm" title="Tester OpenSSL Verify">
+                                        <i class="fa-solid fa-terminal"></i>
+                                    </a>
+                                    <button th:if="${cert.status.name() == 'ACTIVE'}"
+                                            th:data-serial="${cert.serialNumber}"
+                                            th:data-cn="${cert.commonName}"
+                                            onclick="openRevokeModal(this.getAttribute('data-serial'), this.getAttribute('data-cn'))"
+                                            class="btn btn-danger btn-sm" title="Révoquer ce certificat">
+                                        <i class="fa-solid fa-ban"></i> Révoquer
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal de Révocation -->
+        <div id="revokeModal" class="modal-overlay">
+            <div class="modal-box">
+                <div class="card-header">
+                    <h3 class="card-title" style="color: var(--accent-rose);">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Confirmer la Révocation
+                    </h3>
+                    <button type="button" onclick="closeRevokeModal()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem;">&times;</button>
+                </div>
+
+                <form th:action="@{/certificates/revoke}" method="post">
+                    <input type="hidden" id="modalSerialNumber" name="serialNumber">
+
+                    <p style="margin-bottom: 1rem; font-size: 0.95rem;">
+                        Êtes-vous sûr de vouloir révoquer le certificat de <strong id="modalCertCn" style="color: var(--accent-cyan);"></strong> (Serial: <span id="modalSerialText" class="mono-text"></span>) ?
+                    </p>
+
+                    <div class="form-group">
+                        <label class="form-label">Motif de Révocation (RFC 5280)</label>
+                        <select name="reason" class="form-control" required>
+                            <option th:each="r : ${reasons}" th:value="${r}" th:text="${r.description}"></option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Commentaire interne (Optionnel)</label>
+                        <input type="text" name="comments" class="form-control" placeholder="Raison détaillée ou référence ticket">
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+                        <button type="button" onclick="closeRevokeModal()" class="btn btn-secondary">Annuler</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fa-solid fa-ban"></i> Révoquer et Publier la CRL
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        function openRevokeModal(serial, cn) {
+            document.getElementById('modalSerialNumber').value = serial;
+            document.getElementById('modalSerialText').innerText = serial;
+            document.getElementById('modalCertCn').innerText = cn;
+            document.getElementById('revokeModal').classList.add('active');
+        }
+
+        function closeRevokeModal() {
+            document.getElementById('revokeModal').classList.remove('active');
+        }
+
+        function filterCerts() {
+            const query = document.getElementById('certSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#certTable tbody tr');
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+        }
+    </script>
+
+    <footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

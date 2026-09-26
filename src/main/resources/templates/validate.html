@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Validateur de Certificat')}"></head>
+<body>
+
+    <nav th:replace="~{fragments/layout :: nav('validate')}"></nav>
+
+    <main class="main-content">
+        <div th:replace="~{fragments/layout :: alerts}"></div>
+
+        <div class="page-header">
+            <div>
+                <h1 class="page-title"><i class="fa-solid fa-shield-check" style="color: var(--accent-cyan);"></i> Moteur de Validation Cryptographique</h1>
+                <p class="page-subtitle">Vérification de la chaîne de confiance, conformité temporelle, signature Root CA et statut CRL en temps réel</p>
+            </div>
+        </div>
+
+        <div class="grid-cols-2">
+            <!-- Formulaire d'envoi du certificat -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-file-arrow-up"></i> Certificat à Analyser</h2>
+                </div>
+
+                <form th:action="@{/validate}" method="post" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label class="form-label">Importer un fichier certificat (.crt / .pem / .cer)</label>
+                        <input type="file" name="certFile" class="form-control" accept=".crt,.pem,.cer,.txt">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Ou coller directement le contenu PEM</label>
+                        <textarea name="certPem" id="certPemInput" class="form-control" rows="10"
+                                  placeholder="-----BEGIN CERTIFICATE-----&#10;MIIE...&#10;-----END CERTIFICATE-----"
+                                  th:text="${submittedPem}"></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">
+                            <i class="fa-solid fa-magnifying-glass"></i> Lancer la Vérification
+                        </button>
+                        <button type="button" onclick="document.getElementById('certPemInput').value='';" class="btn btn-secondary">
+                            Effacer
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Résultat de Validation -->
+            <div class="card" th:if="${result != null}">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-square-poll-vertical"></i> Rapport de Contrôle</h2>
+                    <span th:if="${result.valid}" class="badge badge-active" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">
+                        <i class="fa-solid fa-circle-check"></i> CERTIFICAT VALIDE
+                    </span>
+                    <span th:if="${result.status != null && result.status.name() == 'REVOKED'}" class="badge badge-revoked" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">
+                        <i class="fa-solid fa-ban"></i> CERTIFICAT RÉVOQUÉ
+                    </span>
+                    <span th:if="${result.status != null && result.status.name() == 'EXPIRED' && result.signatureValid}" class="badge badge-expired" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">
+                        <i class="fa-solid fa-clock-rotate-left"></i> CERTIFICAT EXPIRÉ
+                    </span>
+                    <span th:if="${!result.signatureValid && result.formatValid}" class="badge badge-revoked" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> SIGNATURE INVALIDE
+                    </span>
+                </div>
+
+                <!-- Synthèse sous forme de Checklist -->
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem; font-size: 0.9rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-surface); border-radius: 6px;">
+                        <span><i class="fa-solid fa-file-code"></i> Format X.509 RFC 5280</span>
+                        <span th:if="${result.formatValid}" style="color: var(--accent-emerald); font-weight: 600;"><i class="fa-solid fa-check"></i> Conforme</span>
+                        <span th:if="${!result.formatValid}" style="color: var(--accent-rose); font-weight: 600;"><i class="fa-solid fa-xmark"></i> Invalide</span>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-surface); border-radius: 6px;">
+                        <span><i class="fa-regular fa-clock"></i> Période de Validité Temporelle</span>
+                        <span th:if="${result.timeValid}" style="color: var(--accent-emerald); font-weight: 600;"><i class="fa-solid fa-check"></i> En cours de validité</span>
+                        <span th:if="${!result.timeValid}" style="color: var(--accent-amber); font-weight: 600;"><i class="fa-solid fa-triangle-exclamation"></i> Expiré / Non valide</span>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-surface); border-radius: 6px;">
+                        <span><i class="fa-solid fa-signature"></i> Signature Cryptographique Root CA</span>
+                        <span th:if="${result.signatureValid}" style="color: var(--accent-emerald); font-weight: 600;"><i class="fa-solid fa-check"></i> Authentifiée & Intègre</span>
+                        <span th:if="${!result.signatureValid}" style="color: var(--accent-rose); font-weight: 600;"><i class="fa-solid fa-xmark"></i> Échec Signature</span>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-surface); border-radius: 6px;">
+                        <span><i class="fa-solid fa-ban"></i> Statut Liste de Révocation (CRL)</span>
+                        <span th:if="${result.notRevoked}" style="color: var(--accent-emerald); font-weight: 600;"><i class="fa-solid fa-check"></i> Non Révoqué</span>
+                        <span th:if="${!result.notRevoked}" style="color: var(--accent-rose); font-weight: 600;">
+                            <i class="fa-solid fa-xmark"></i> RÉVOQUÉ (<span th:text="${result.revocationReason}"></span>)
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Métadonnées extraites -->
+                <div th:if="${result.formatValid}" style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <div><strong>Sujet (DN) :</strong> <span th:text="${result.subjectDn}" style="color: var(--accent-cyan);"></span></div>
+                    <div><strong>Émetteur (Issuer DN) :</strong> <span th:text="${result.issuerDn}"></span></div>
+                    <div><strong>Numéro de Série (Hex) :</strong> <span class="mono-text" th:text="${result.serialNumber}"></span></div>
+                    <div><strong>Période :</strong> du <span th:text="${result.notBefore}"></span> au <span th:text="${result.notAfter}"></span></div>
+                    <div><strong>Empreinte SHA-256 :</strong> <span class="mono-text" style="font-size: 0.75rem;" th:text="${result.sha256Fingerprint}"></span></div>
+
+                    <!-- Extensions -->
+                    <div th:if="${!#lists.isEmpty(result.extensions)}" style="margin-top: 0.5rem;">
+                        <strong>Extensions X.509v3 Détectées :</strong>
+                        <ul style="list-style: none; margin-top: 0.25rem; color: var(--text-secondary);">
+                            <li th:each="ext : ${result.extensions}">
+                                <i class="fa-solid fa-angle-right" style="color: var(--accent-cyan);"></i> <span th:text="${ext}"></span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Journal d'exécution pas-à-pas -->
+                <div style="margin-top: 1.25rem;">
+                    <strong style="font-size: 0.85rem; color: var(--text-secondary);"><i class="fa-solid fa-terminal"></i> Journal d'Inspection :</strong>
+                    <div class="code-block" style="margin-top: 0.4rem; max-height: 160px; font-size: 0.8rem;">
+                        <div th:each="log : ${result.diagnosticLogs}" th:text="${log}"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message d'attente si pas encore de vérification -->
+            <div class="card" th:if="${result == null}" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--text-muted); padding: 3rem;">
+                <i class="fa-solid fa-shield-halved" style="font-size: 3.5rem; color: var(--border-color); margin-bottom: 1rem;"></i>
+                <h3>En attente d'un certificat</h3>
+                <p style="font-size: 0.9rem; max-width: 400px; margin-top: 0.5rem;">
+                    Importez un fichier certificat ou collez son contenu PEM dans le formulaire ci-contre pour tester sa validité contre la Root CA et la CRL.
+                </p>
+            </div>
+        </div>
+
+    </main>
+
+    <footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>
